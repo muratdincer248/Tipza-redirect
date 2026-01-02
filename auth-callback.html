@@ -62,69 +62,188 @@
         <p id="manual-link" style="display: none; margin-top: 1rem;">
             <a id="app-link" class="link">Click here to open the app</a>
         </p>
+        <p id="expo-toggle" style="display: none; margin-top: 1rem; font-size: 0.9rem;">
+            <a id="toggle-expo" class="link" style="opacity: 0.8;">Switch to Expo Go</a>
+        </p>
     </div>
 
     <script>
         (function() {
             // Get the current URL
             const currentUrl = window.location.href;
-            console.log('Redirect page loaded. URL:', currentUrl);
+            console.log('🔗 Redirect page loaded. Full URL:', currentUrl);
+            console.log('📍 Hash:', window.location.hash);
+            console.log('🔍 Query:', window.location.search);
 
-            // Extract tokens from URL hash (Supabase puts them here)
+            // Extract tokens from URL hash (Supabase puts them here after verification)
             const hash = window.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
+            const hashParams = new URLSearchParams(hash);
             
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-            const type = params.get('type');
-            const expiresAt = params.get('expires_at');
-            const expiresIn = params.get('expires_in');
-            const tokenType = params.get('token_type');
+            const accessToken = hashParams.get('access_token');
+            const refreshToken = hashParams.get('refresh_token');
+            const tokenType = hashParams.get('type');
+            const expiresAt = hashParams.get('expires_at');
+            const expiresIn = hashParams.get('expires_in');
+            const tokenTypeBearer = hashParams.get('token_type');
 
-            console.log('Extracted tokens:', {
+            console.log('🔑 Extracted from hash:', {
                 hasAccessToken: !!accessToken,
                 hasRefreshToken: !!refreshToken,
-                type: type
+                type: tokenType,
+                allHashParams: Array.from(hashParams.keys())
             });
 
-            // Determine the app deep link based on user agent or use a default
-            // For development (Expo Go), we'll use a pattern that matches common setups
-            // For production, use tipza://
-            let deepLinkBase = 'tipza://auth/callback';
+            // Check query parameters (Supabase sends verification token first)
+            const urlParams = new URLSearchParams(window.location.search);
+            const verificationToken = urlParams.get('token');
+            const typeParam = urlParams.get('type') || 'signup';
+            const redirectTo = urlParams.get('redirect_to');
+            const errorParam = urlParams.get('error');
+            const errorDescription = urlParams.get('error_description');
             
-            // Check if we're on mobile
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            console.log('🔍 Query params:', {
+                hasVerificationToken: !!verificationToken,
+                type: typeParam,
+                redirectTo: redirectTo,
+                error: errorParam,
+                allQueryParams: Array.from(urlParams.keys())
+            });
             
-            // For development, try to detect Expo Go
-            // You can customize this based on your setup
-            const hostname = window.location.hostname;
-            if (hostname.includes('localhost') || hostname.includes('192.168')) {
-                // Try to construct Expo Go URL - you may need to adjust this
-                // For now, we'll use a pattern that should work
-                deepLinkBase = 'exp://192.168.2.163:8082/--/auth/callback';
+            // PRIORITY 1: Check for Supabase errors first
+            if (errorParam) {
+                console.error('❌ Supabase error:', errorParam, errorDescription);
+                document.getElementById('status').textContent = `Error: ${errorDescription || errorParam}`;
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = errorDescription || `Authentication error: ${errorParam}`;
+                return;
             }
-
-            if (accessToken && refreshToken) {
-                // Build the deep link with tokens
-                const deepLink = `${deepLinkBase}#access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&type=${type || 'signup'}&expires_at=${expiresAt || ''}&expires_in=${expiresIn || ''}&token_type=${tokenType || 'bearer'}`;
+            
+            // PRIORITY 2: If we have a verification token but no access token, Supabase needs to verify it first
+            // This is the normal flow: email link → verification token → Supabase verify → access tokens
+            if (verificationToken && !accessToken) {
+                console.log('✅ Verification token found, redirecting to Supabase verify endpoint...');
+                document.getElementById('status').textContent = 'Verifying token with Supabase...';
                 
-                console.log('Redirecting to app:', deepLink);
-                document.getElementById('status').textContent = 'Redirecting to app...';
+                // Construct the current page URL that Supabase should redirect back to
+                // After verification, Supabase will redirect here with tokens in the hash
+                const currentUrl = window.location.origin + window.location.pathname;
+                
+                // Redirect to Supabase verify endpoint
+                // Supabase will verify the token and redirect back to currentUrl with access_token in hash
+                const verifyUrl = `https://trxpdpedeivpynwnemtl.supabase.co/auth/v1/verify?token=${encodeURIComponent(verificationToken)}&type=${encodeURIComponent(typeParam)}&redirect_to=${encodeURIComponent(currentUrl)}`;
+                console.log('🔄 Redirecting to Supabase verify:', verifyUrl);
+                
+                // Redirect to Supabase - it will verify and redirect back with tokens
+                window.location.href = verifyUrl;
+                return; // Exit early, will reload with tokens
+            }
+            
+            // PRIORITY 3: If we have access tokens, redirect to app
+            if (accessToken && refreshToken) {
+                // Determine which app to use
+                // Since this is accessed from GitHub Pages (development), prefer Expo Go
+                const hostname = window.location.hostname;
+                const isDevelopment = hostname.includes('github.io') || 
+                                    hostname.includes('localhost') || 
+                                    hostname.includes('192.168');
+                
+                // Check for explicit preference
+                const preferExpo = urlParams.get('expo') === 'true' || 
+                                 urlParams.get('useExpo') === 'true' ||
+                                 localStorage.getItem('preferExpoGo') === 'true';
+                
+                const preferProduction = urlParams.get('prod') === 'true' ||
+                                       urlParams.get('production') === 'true';
+                
+                // Build tokens string (used for both apps)
+                const tokensString = `#access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&type=${tokenType || 'signup'}&expires_at=${expiresAt || ''}&expires_in=${expiresIn || ''}&token_type=${tokenTypeBearer || 'bearer'}`;
+                
+                // Determine which app to use
+                // Default to Expo Go when accessed from GitHub Pages (development)
+                // Only use production if explicitly requested
+                let useExpoGo = true; // Default to Expo Go for development
+                
+                if (preferProduction) {
+                    useExpoGo = false;
+                    console.log('📱 Using production app (explicit preference)');
+                } else if (preferExpo || isDevelopment) {
+                    useExpoGo = true;
+                    console.log('📱 Using Expo Go (development mode)');
+                } else {
+                    // If not explicitly set and not on GitHub Pages, still try Expo Go first
+                    // User can override with ?prod=true if needed
+                    useExpoGo = true;
+                    console.log('📱 Using Expo Go (default for development)');
+                }
+                
+                // Expo Go URL - Try multiple common configurations
+                // The user should update this to match their current Expo Go URL
+                // Common patterns:
+                // - exp://192.168.X.X:8081/--/auth/callback (default Expo port)
+                // - exp://192.168.X.X:8082/--/auth/callback (custom port)
+                // - exp://localhost:8081/--/auth/callback (localhost)
+                
+                // Try to detect from current page or use common defaults
+                const possibleExpoUrls = [
+                    'exp://192.168.2.163:8083/--/auth/callback',  // Your current Expo Go URL
+                    'exp://192.168.2.163:8082/--/auth/callback',  // Previous port (fallback)
+                    'exp://192.168.1.1:8081/--/auth/callback',    // Common router IP
+                    'exp://localhost:8081/--/auth/callback',      // Localhost
+                ];
+                
+                // Use first Expo URL (your current Expo Go URL)
+                const expoGoUrl = possibleExpoUrls[0];
+                const productionUrl = 'tipza://auth/callback';
+                
+                const deepLink = useExpoGo 
+                    ? `${expoGoUrl}${tokensString}`
+                    : `${productionUrl}${tokensString}`;
+                
+                console.log('✅ Redirecting to app:', deepLink);
+                console.log('📱 Using:', useExpoGo ? 'Expo Go' : 'Production');
+                document.getElementById('status').textContent = useExpoGo 
+                    ? 'Opening Expo Go...' 
+                    : 'Opening app...';
 
                 // Try to redirect immediately
                 window.location.href = deepLink;
-
-                // Fallback: Show manual link after a delay
+                
+                // Fallback: Show manual link after a delay if app didn't open automatically
                 setTimeout(() => {
-                    document.getElementById('status').textContent = 'If the app didn\'t open automatically:';
-                    document.getElementById('manual-link').style.display = 'block';
-                    document.getElementById('app-link').href = deepLink;
-                    document.getElementById('app-link').onclick = function(e) {
-                        e.preventDefault();
-                        window.location.href = deepLink;
-                    };
+                    if (document.getElementById('manual-link').style.display === 'none') {
+                        console.log('⚠️ App might not have opened automatically');
+                        document.getElementById('status').textContent = useExpoGo 
+                            ? 'If Expo Go didn\'t open automatically:' 
+                            : 'If the app didn\'t open automatically:';
+                        document.getElementById('manual-link').style.display = 'block';
+                        document.getElementById('app-link').href = deepLink;
+                        document.getElementById('app-link').onclick = function(e) {
+                            e.preventDefault();
+                            window.location.href = deepLink;
+                        };
+                    }
                 }, 2000);
 
+
+                // Show toggle option for Expo Go
+                const toggleExpo = document.getElementById('toggle-expo');
+                const expoToggle = document.getElementById('expo-toggle');
+                if (toggleExpo && expoToggle) {
+                    expoToggle.style.display = 'block';
+                    toggleExpo.onclick = function(e) {
+                        e.preventDefault();
+                        // Toggle preference
+                        const preferExpo = localStorage.getItem('preferExpoGo') === 'true';
+                        localStorage.setItem('preferExpoGo', (!preferExpo).toString());
+                        
+                        // Reload with expo parameter
+                        const url = new URL(window.location);
+                        url.searchParams.set('expo', (!preferExpo).toString());
+                        url.hash = window.location.hash; // Preserve tokens
+                        window.location.href = url.toString();
+                    };
+                }
+                
                 // Final fallback: Try to open app after 3 seconds
                 setTimeout(() => {
                     if (document.getElementById('manual-link').style.display === 'block') {
@@ -133,30 +252,15 @@
                         document.getElementById('error').textContent = 'Unable to open app automatically. Please click the link above.';
                     }
                 }, 3000);
-
-            } else {
-                // No tokens found
-                console.error('No tokens found in URL');
-                document.getElementById('status').textContent = 'Error: No authentication tokens found.';
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('error').textContent = 'The verification link may be invalid or expired. Please try requesting a new confirmation email.';
+                return;
             }
-
-            // Also check query parameters as fallback (some email clients might modify the URL)
-            if (!accessToken) {
-                const urlParams = new URLSearchParams(window.location.search);
-                const token = urlParams.get('token');
-                const redirectTo = urlParams.get('redirect_to');
-                
-                if (token && redirectTo) {
-                    // Supabase verification token - redirect to Supabase verify endpoint
-                    const verifyUrl = `https://trxpdpedeivpynwnemtl.supabase.co/auth/v1/verify?token=${token}&type=signup&redirect_to=${encodeURIComponent(redirectTo)}`;
-                    console.log('Redirecting to Supabase verify:', verifyUrl);
-                    window.location.href = verifyUrl;
-                }
-            }
+            
+            // PRIORITY 4: No tokens found - show error
+            console.error('❌ No tokens found in URL');
+            document.getElementById('status').textContent = 'Error: No authentication tokens found.';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error').textContent = 'The verification link may be invalid or expired. Please try requesting a new confirmation email.';
         })();
     </script>
 </body>
 </html>
-
