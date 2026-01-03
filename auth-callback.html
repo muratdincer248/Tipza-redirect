@@ -156,34 +156,13 @@
                                        urlParams.get('production') === 'true';
                 
                 // Build tokens string (used for both apps)
-                const tokensString = `#access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&type=${tokenType || 'signup'}&expires_at=${expiresAt || ''}&expires_in=${expiresIn || ''}&token_type=${tokenTypeBearer || 'bearer'}`;
+                // Use query parameters instead of hash for better compatibility with deep links
+                const tokensString = `?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&type=${encodeURIComponent(tokenType || 'signup')}&expires_at=${encodeURIComponent(expiresAt || '')}&expires_in=${encodeURIComponent(expiresIn || '')}&token_type=${encodeURIComponent(tokenTypeBearer || 'bearer')}`;
                 
                 // Determine which app to use
-                // Default to Expo Go when accessed from GitHub Pages (development)
-                // Only use production if explicitly requested
-                let useExpoGo = true; // Default to Expo Go for development
+                const productionUrl = 'tipza://auth/callback';
                 
-                if (preferProduction) {
-                    useExpoGo = false;
-                    console.log('📱 Using production app (explicit preference)');
-                } else if (preferExpo || isDevelopment) {
-                    useExpoGo = true;
-                    console.log('📱 Using Expo Go (development mode)');
-                } else {
-                    // If not explicitly set and not on GitHub Pages, still try Expo Go first
-                    // User can override with ?prod=true if needed
-                    useExpoGo = true;
-                    console.log('📱 Using Expo Go (default for development)');
-                }
-                
-                // Expo Go URL - Try multiple common configurations
-                // The user should update this to match their current Expo Go URL
-                // Common patterns:
-                // - exp://192.168.X.X:8081/--/auth/callback (default Expo port)
-                // - exp://192.168.X.X:8082/--/auth/callback (custom port)
-                // - exp://localhost:8081/--/auth/callback (localhost)
-                
-                // Try to detect from current page or use common defaults
+                // Expo Go URLs - fallback options
                 const possibleExpoUrls = [
                     'exp://192.168.2.163:8083/--/auth/callback',  // Your current Expo Go URL
                     'exp://192.168.2.163:8082/--/auth/callback',  // Previous port (fallback)
@@ -191,22 +170,51 @@
                     'exp://localhost:8081/--/auth/callback',      // Localhost
                 ];
                 
-                // Use first Expo URL (your current Expo Go URL)
-                const expoGoUrl = possibleExpoUrls[0];
-                const productionUrl = 'tipza://auth/callback';
+                // Determine which URL to use
+                let useExpoGo = false;
+                let deepLink = '';
                 
-                const deepLink = useExpoGo 
-                    ? `${expoGoUrl}${tokensString}`
-                    : `${productionUrl}${tokensString}`;
+                if (preferExpo) {
+                    // User explicitly wants Expo Go
+                    useExpoGo = true;
+                    deepLink = `${possibleExpoUrls[0]}${tokensString}`;
+                    console.log('📱 Using Expo Go (explicit preference)');
+                } else if (preferProduction) {
+                    // User explicitly wants production
+                    useExpoGo = false;
+                    deepLink = `${productionUrl}${tokensString}`;
+                    console.log('📱 Using production app (explicit preference)');
+                } else {
+                    // Default: For development (GitHub Pages), prefer Expo Go
+                    // For production, this should use tipza://
+                    if (isDevelopment) {
+                        useExpoGo = true;
+                        deepLink = `${possibleExpoUrls[0]}${tokensString}`;
+                        console.log('📱 Using Expo Go (development detected)');
+                    } else {
+                        useExpoGo = false;
+                        deepLink = `${productionUrl}${tokensString}`;
+                        console.log('📱 Using production app');
+                    }
+                }
                 
                 console.log('✅ Redirecting to app:', deepLink);
-                console.log('📱 Using:', useExpoGo ? 'Expo Go' : 'Production');
-                document.getElementById('status').textContent = useExpoGo 
-                    ? 'Opening Expo Go...' 
-                    : 'Opening app...';
+                document.getElementById('status').textContent = 'Opening app...';
 
-                // Try to redirect immediately
+                // Try to redirect to app
+                console.log('🚀 Attempting to open:', deepLink);
                 window.location.href = deepLink;
+                
+                // Fallback: If using production URL in development, try Expo Go after a delay
+                if (!useExpoGo && isDevelopment) {
+                    setTimeout(() => {
+                        // If we're still on this page after 1.5 seconds, try Expo Go
+                        const expoFallback = `${possibleExpoUrls[0]}${tokensString}`;
+                        console.log('⚠️ Production app might not have opened, trying Expo Go fallback...');
+                        document.getElementById('status').textContent = 'Trying Expo Go...';
+                        window.location.href = expoFallback;
+                    }, 1500);
+                }
                 
                 // Fallback: Show manual link after a delay if app didn't open automatically
                 setTimeout(() => {
@@ -230,17 +238,13 @@
                 const expoToggle = document.getElementById('expo-toggle');
                 if (toggleExpo && expoToggle) {
                     expoToggle.style.display = 'block';
+                    toggleExpo.textContent = useExpoGo ? 'Switch to Production App' : 'Switch to Expo Go';
                     toggleExpo.onclick = function(e) {
                         e.preventDefault();
-                        // Toggle preference
-                        const preferExpo = localStorage.getItem('preferExpoGo') === 'true';
-                        localStorage.setItem('preferExpoGo', (!preferExpo).toString());
-                        
-                        // Reload with expo parameter
-                        const url = new URL(window.location);
-                        url.searchParams.set('expo', (!preferExpo).toString());
-                        url.hash = window.location.hash; // Preserve tokens
-                        window.location.href = url.toString();
+                        // Toggle to the other scheme
+                        const newUrl = useExpoGo ? `${productionUrl}${tokensString}` : `${possibleExpoUrls[0]}${tokensString}`;
+                        console.log('🔄 Switching to:', newUrl);
+                        window.location.href = newUrl;
                     };
                 }
                 
