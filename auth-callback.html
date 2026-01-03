@@ -178,10 +178,11 @@
                 
                 // Expo Go URLs - fallback options
                 const possibleExpoUrls = [
-                    'exp://192.168.2.163:8083/--/auth/callback',  // Your current Expo Go URL
-                    'exp://192.168.2.163:8082/--/auth/callback',  // Previous port (fallback)
+                    'exp://192.168.2.163:8082/--/auth/callback',  // Your current Expo Go URL
+                    'exp://192.168.2.163:8083/--/auth/callback',  // Previous port (fallback)
+                    'exp://192.168.2.163:8081/--/auth/callback',  // Alternative port
                     'exp://192.168.1.1:8081/--/auth/callback',    // Common router IP
-                    'exp://localhost:8081/--/auth/callback',      // Localhost
+                    'exp://localhost:8082/--/auth/callback',      // Localhost
                 ];
                 
                 // Determine which URL to use
