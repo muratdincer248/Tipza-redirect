@@ -153,10 +153,11 @@
             if (accessToken && refreshToken) {
                 const tokens = `?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&type=${encodeURIComponent(tokenType)}&expires_at=${encodeURIComponent(expiresAt)}&expires_in=${encodeURIComponent(expiresIn)}&token_type=${encodeURIComponent(tokenTypeBearer)}`;
                 
-                // Use Expo Go URL for development (GitHub Pages)
-                const deepLink = 'exp://192.168.2.163:8082/--/auth/callback' + tokens;
+                // Use production app deep link scheme (tipza://)
+                // This works for TestFlight and App Store builds
+                const deepLink = 'tipza://auth/callback' + tokens;
                 
-                console.log('✅ Redirecting to app');
+                console.log('✅ Redirecting to Tipza app');
                 showSuccess(deepLink);
                 return;
             }
