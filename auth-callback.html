@@ -98,6 +98,13 @@
             console.log('🔑 Full hash:', window.location.hash.substring(0, 200)); // First 200 chars for debugging
             console.log('🔑 All hash params:', Array.from(hashParams.keys()));
             
+            // Check for errors in hash
+            const hashError = hashParams.get('error');
+            const hashErrorCode = hashParams.get('error_code');
+            if (hashError) {
+                console.error('❌ Error in hash:', hashErrorCode, hashParams.get('error_description'));
+            }
+            
             // Show error
             function showError(msg) {
                 $('spinner').classList.add('hidden');
@@ -138,9 +145,21 @@
                 }, 500);
             }
             
-            // Handle errors from Supabase
-            if (errorParam) {
-                showError(errorDescription || errorParam);
+            // Handle errors from Supabase (check both query params and hash)
+            const hashErrorDescription = hashParams.get('error_description');
+            
+            if (errorParam || hashError) {
+                const errorMsg = errorDescription || hashErrorDescription || errorParam || hashError;
+                const errorCode = hashErrorCode || '';
+                
+                console.error('❌ Supabase error:', errorCode, errorMsg);
+                
+                // Special handling for expired links
+                if (errorCode === 'otp_expired' || errorMsg?.includes('expired')) {
+                    showError('This link has expired. Please request a new magic link.');
+                } else {
+                    showError(errorMsg || 'Authentication failed. Please try again.');
+                }
                 return;
             }
             
