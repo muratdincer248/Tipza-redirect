@@ -93,6 +93,10 @@
             console.log('🔗 Auth callback loaded');
             console.log('🔑 Has access token:', !!accessToken);
             console.log('🔑 Has verification token:', !!verificationToken);
+            console.log('🔑 Access token length:', accessToken ? accessToken.length : 0);
+            console.log('🔑 Refresh token length:', refreshToken ? refreshToken.length : 0);
+            console.log('🔑 Full hash:', window.location.hash.substring(0, 200)); // First 200 chars for debugging
+            console.log('🔑 All hash params:', Array.from(hashParams.keys()));
             
             // Show error
             function showError(msg) {
