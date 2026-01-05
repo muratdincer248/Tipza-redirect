@@ -142,7 +142,19 @@
                 $('open-btn').href = deepLink;
                 $('open-btn').onclick = (e) => {
                     e.preventDefault();
+                    // Try multiple methods to open deep link on iOS
+                    // Method 1: Direct location change
                     window.location.href = deepLink;
+                    
+                    // Method 2: Fallback after short delay (in case first method fails)
+                    setTimeout(() => {
+                        // Try using window.open as fallback
+                        const fallbackWindow = window.open(deepLink, '_self');
+                        if (!fallbackWindow) {
+                            // If that fails, show copy button
+                            $('copy-btn').click();
+                        }
+                    }, 500);
                 };
                 
                 $('copy-btn').onclick = () => {
@@ -219,15 +231,28 @@
                     ? `&refresh_token=${encodeURIComponent(validRefreshToken)}`
                     : '';
                 
-                const tokens = `?access_token=${encodeURIComponent(accessToken)}${refreshTokenParam}&type=${encodeURIComponent(tokenType)}&expires_at=${encodeURIComponent(expiresAt)}&expires_in=${encodeURIComponent(expiresIn)}&token_type=${encodeURIComponent(tokenTypeBearer)}`;
+                // Build tokens string - prioritize access_token (required)
+                // Note: Deep links have length limits, so we include essential params only
+                const essentialParams = `?access_token=${encodeURIComponent(accessToken)}${refreshTokenParam}&type=${encodeURIComponent(tokenType)}`;
                 
                 // Use production app deep link scheme (tipza://)
                 // This works for TestFlight and App Store builds
-                const deepLink = 'tipza://auth/callback' + tokens;
+                const deepLink = 'tipza://auth/callback' + essentialParams;
                 
                 console.log('✅ Redirecting to Tipza app');
                 console.log('🔑 Deep link length:', deepLink.length);
-                showSuccess(deepLink);
+                console.log('🔑 Deep link preview:', deepLink.substring(0, 100) + '...');
+                
+                // Check if deep link is too long (iOS has ~2000 char limit, but be safe with 1500)
+                if (deepLink.length > 1500) {
+                    console.warn('⚠️ Deep link is very long (', deepLink.length, 'chars) - might be truncated');
+                    console.warn('⚠️ Using minimal params (access_token only)');
+                    // Use only access_token if link is too long
+                    const minimalLink = `tipza://auth/callback?access_token=${encodeURIComponent(accessToken)}&type=${encodeURIComponent(tokenType)}`;
+                    showSuccess(minimalLink);
+                } else {
+                    showSuccess(deepLink);
+                }
                 return;
             }
             
