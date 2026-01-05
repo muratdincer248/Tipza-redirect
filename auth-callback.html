@@ -95,8 +95,26 @@
             console.log('🔑 Has verification token:', !!verificationToken);
             console.log('🔑 Access token length:', accessToken ? accessToken.length : 0);
             console.log('🔑 Refresh token length:', refreshToken ? refreshToken.length : 0);
-            console.log('🔑 Full hash:', window.location.hash.substring(0, 200)); // First 200 chars for debugging
+            console.log('🔑 Full hash length:', window.location.hash.length);
+            console.log('🔑 Full hash (first 500 chars):', window.location.hash.substring(0, 500));
             console.log('🔑 All hash params:', Array.from(hashParams.keys()));
+            
+            // Debug: Check if refresh_token exists in hash string
+            const hashString = window.location.hash.substring(1);
+            const refreshTokenIndex = hashString.indexOf('refresh_token=');
+            if (refreshTokenIndex !== -1) {
+                const refreshTokenStart = refreshTokenIndex + 'refresh_token='.length;
+                const afterRefreshToken = hashString.substring(refreshTokenStart);
+                const refreshTokenEnd = afterRefreshToken.indexOf('&');
+                const rawRefreshToken = refreshTokenEnd !== -1 
+                    ? afterRefreshToken.substring(0, refreshTokenEnd)
+                    : afterRefreshToken;
+                console.log('🔑 Raw refresh token from hash (first 50 chars):', rawRefreshToken.substring(0, 50));
+                console.log('🔑 Raw refresh token length:', rawRefreshToken.length);
+                console.log('🔑 Decoded refresh token length:', decodeURIComponent(rawRefreshToken).length);
+            } else {
+                console.warn('⚠️ refresh_token= not found in hash string');
+            }
             
             // Check for errors in hash
             const hashError = hashParams.get('error');
@@ -173,14 +191,42 @@
             }
             
             // Handle access tokens (second step - redirect to app)
-            if (accessToken && refreshToken) {
-                const tokens = `?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}&type=${encodeURIComponent(tokenType)}&expires_at=${encodeURIComponent(expiresAt)}&expires_in=${encodeURIComponent(expiresIn)}&token_type=${encodeURIComponent(tokenTypeBearer)}`;
+            if (accessToken) {
+                // Check if refresh token is valid (should be 200+ chars)
+                let validRefreshToken = refreshToken;
+                
+                if (!refreshToken || refreshToken.length < 30) {
+                    console.warn('⚠️ Refresh token is too short or missing:', refreshToken?.length || 0);
+                    console.warn('⚠️ Attempting to extract refresh token manually from hash...');
+                    
+                    // Try to extract refresh token manually from hash string
+                    const hashString = window.location.hash.substring(1);
+                    const refreshTokenMatch = hashString.match(/refresh_token=([^&]*)/);
+                    if (refreshTokenMatch && refreshTokenMatch[1]) {
+                        const extractedRefreshToken = decodeURIComponent(refreshTokenMatch[1]);
+                        console.log('🔑 Extracted refresh token length:', extractedRefreshToken.length);
+                        if (extractedRefreshToken.length >= 30) {
+                            validRefreshToken = extractedRefreshToken;
+                            console.log('✅ Using manually extracted refresh token');
+                        } else {
+                            console.warn('⚠️ Manually extracted refresh token is also too short');
+                        }
+                    }
+                }
+                
+                // Build tokens string - use empty string if refresh token is invalid
+                const refreshTokenParam = validRefreshToken && validRefreshToken.length >= 30
+                    ? `&refresh_token=${encodeURIComponent(validRefreshToken)}`
+                    : '';
+                
+                const tokens = `?access_token=${encodeURIComponent(accessToken)}${refreshTokenParam}&type=${encodeURIComponent(tokenType)}&expires_at=${encodeURIComponent(expiresAt)}&expires_in=${encodeURIComponent(expiresIn)}&token_type=${encodeURIComponent(tokenTypeBearer)}`;
                 
                 // Use production app deep link scheme (tipza://)
                 // This works for TestFlight and App Store builds
                 const deepLink = 'tipza://auth/callback' + tokens;
                 
                 console.log('✅ Redirecting to Tipza app');
+                console.log('🔑 Deep link length:', deepLink.length);
                 showSuccess(deepLink);
                 return;
             }
