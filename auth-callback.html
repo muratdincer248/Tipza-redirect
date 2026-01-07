@@ -1,175 +1,258 @@
-/**
- * Consent Acceptance Screen
- * 
- * Full-screen blocking modal that requires users to accept Terms of Service
- * and Privacy Policy before accessing the app.
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tipza - Authentication</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #027A4D 0%, #035a3a 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+        .container { text-align: center; max-width: 320px; }
+        .icon {
+            width: 60px; height: 60px;
+            margin: 0 auto 20px;
+        }
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        h1 { font-size: 22px; margin-bottom: 8px; }
+        p { font-size: 15px; opacity: 0.9; line-height: 1.4; }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            margin-top: 16px;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-primary { background: white; color: #027A4D; }
+        .btn-secondary { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+        .error { color: #ff6b6b; margin-top: 16px; }
+        .hidden { display: none; }
+        .help { font-size: 12px; opacity: 0.6; margin-top: 20px; }
+        .debug { font-size: 10px; opacity: 0.5; margin-top: 24px; word-break: break-all; max-height: 100px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon spinner" id="spinner"></div>
+        <svg class="icon hidden" id="checkmark" viewBox="0 0 60 60" fill="none">
+            <circle cx="30" cy="30" r="28" stroke="white" stroke-width="2"/>
+            <path d="M18 30l8 8 16-16" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        
+        <h1 id="title">Authenticating...</h1>
+        <p id="message">Please wait</p>
+        <p class="error hidden" id="error"></p>
+        
+        <div id="actions" class="hidden">
+            <a href="#" class="btn btn-primary" id="open-btn">Open Tipza</a>
+            <button class="btn btn-secondary" id="copy-btn">Copy Link</button>
+        </div>
+        
+        <p class="help hidden" id="help">If the app doesn't open automatically, tap "Open Tipza" or copy the link.</p>
+        <p class="debug" id="debug"></p>
+    </div>
 
-import { LoadingSpinner } from '@/src/components/LoadingSpinner';
-import { Button, Text } from '@/src/components/primitives';
-import { LEGAL_URLS } from '@/src/constants/legal';
-import { theme } from '@/src/design';
-import { useAuth } from '@/src/store';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import {
-    Alert,
-    KeyboardAvoidingView,
-    Linking,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    View,
-} from 'react-native';
-
-export default function ConsentScreen() {
-  const router = useRouter();
-  const { acceptConsent } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleAccept = async () => {
-    setIsLoading(true);
-    try {
-      await acceptConsent();
-      // Navigation will be handled by auth guards after consent is accepted
-      router.replace('/(tabs)/home');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save consent. Please try again.');
-      setIsLoading(false);
-    }
-  };
-
-  const handleOpenTerms = () => {
-    Linking.openURL(LEGAL_URLS.TERMS).catch(() => {
-      Alert.alert('Error', 'Unable to open Terms of Service');
-    });
-  };
-
-  const handleOpenPrivacy = () => {
-    Linking.openURL(LEGAL_URLS.PRIVACY).catch(() => {
-      Alert.alert('Error', 'Unable to open Privacy Policy');
-    });
-  };
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Title */}
-          <View style={styles.titleSection}>
-            <Text variant="display2xl" style={styles.title}>
-              Terms & Privacy
-            </Text>
-            <Text variant="bodyMdRegular" style={styles.subtitle}>
-              Please review and accept our terms to continue
-            </Text>
-          </View>
-
-          {/* Content */}
-          <View style={styles.contentSection}>
-            <Text variant="bodyMdRegular" style={styles.contentText}>
-              To use Tipza, you need to accept our Terms of Service and Privacy Policy.
-              These documents explain how we handle your data and what you can expect from our service.
-            </Text>
-
-            <View style={styles.linksContainer}>
-              <Text
-                variant="bodyMdSemibold"
-                style={styles.link}
-                onPress={handleOpenTerms}
-              >
-                Read Terms of Service
-              </Text>
-              <Text
-                variant="bodyMdSemibold"
-                style={styles.link}
-                onPress={handleOpenPrivacy}
-              >
-                Read Privacy Policy
-              </Text>
-            </View>
-          </View>
-
-          {/* Accept Button */}
-          <View style={styles.buttonSection}>
-            <Button
-              variant="primary"
-              size="medium"
-              onPress={handleAccept}
-              disabled={isLoading}
-              style={styles.acceptButton}
-            >
-              {isLoading ? (
-                <LoadingSpinner size={20} color={theme.colors.green['20']} />
-              ) : (
-                'Accept and Continue'
-              )}
-            </Button>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: theme.colors.base.flat,
-  },
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flex: 1,
-    paddingHorizontal: theme.spacing['spacing-5xl'], // 24px
-    paddingBottom: theme.spacing['spacing-8xl'], // 64px
-    justifyContent: 'space-between',
-  },
-  titleSection: {
-    marginTop: theme.spacing['spacing-6xl'], // 32px
-    marginBottom: theme.spacing['spacing-6xl'], // 32px
-  },
-  title: {
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing['spacing-xs'], // 4px
-  },
-  subtitle: {
-    color: theme.colors.text.secondary,
-  },
-  contentSection: {
-    flex: 1,
-    gap: theme.spacing['spacing-4xl'], // 24px
-  },
-  contentText: {
-    color: theme.colors.text.primary,
-    lineHeight: 24,
-  },
-  linksContainer: {
-    gap: theme.spacing['spacing-l'], // 12px
-    paddingVertical: theme.spacing['spacing-2xl'], // 16px
-  },
-  link: {
-    color: theme.colors.text.primary,
-    textDecorationLine: 'underline',
-    fontSize: 16,
-  },
-  buttonSection: {
-    paddingTop: theme.spacing['spacing-4xl'], // 24px
-  },
-  acceptButton: {
-    width: '100%',
-  },
-});
-
+    <script>
+        (function() {
+            const $ = id => document.getElementById(id);
+            const fullUrl = window.location.href;
+            
+            console.log('🔗 Auth callback loaded');
+            console.log('📍 Full URL:', fullUrl);
+            console.log('📍 Hash:', window.location.hash);
+            console.log('📍 Search:', window.location.search);
+            
+            // Extract tokens from multiple possible locations
+            // Supabase can return tokens in hash (#) or as query params (?)
+            
+            let accessToken = null;
+            let refreshToken = null;
+            let tokenType = 'signup';
+            let errorParam = null;
+            let errorDescription = null;
+            
+            // Method 1: Try hash fragment first (standard OAuth implicit flow)
+            if (window.location.hash && window.location.hash.length > 1) {
+                const hash = window.location.hash.substring(1);
+                const hashParams = new URLSearchParams(hash);
+                accessToken = hashParams.get('access_token');
+                refreshToken = hashParams.get('refresh_token');
+                tokenType = hashParams.get('type') || tokenType;
+                errorParam = hashParams.get('error');
+                errorDescription = hashParams.get('error_description');
+                console.log('🔍 Method 1 (hash):', { accessToken: !!accessToken, refreshToken: !!refreshToken });
+            }
+            
+            // Method 2: Try query params (some flows use this)
+            if (!accessToken) {
+                const urlParams = new URLSearchParams(window.location.search);
+                accessToken = urlParams.get('access_token');
+                refreshToken = urlParams.get('refresh_token');
+                tokenType = urlParams.get('type') || tokenType;
+                errorParam = errorParam || urlParams.get('error');
+                errorDescription = errorDescription || urlParams.get('error_description');
+                console.log('🔍 Method 2 (query):', { accessToken: !!accessToken, refreshToken: !!refreshToken });
+            }
+            
+            // Method 3: Manual regex extraction from full URL (fallback)
+            if (!accessToken) {
+                const accessMatch = fullUrl.match(/[#&?]access_token=([^&]*)/);
+                const refreshMatch = fullUrl.match(/[#&?]refresh_token=([^&]*)/);
+                if (accessMatch) {
+                    accessToken = decodeURIComponent(accessMatch[1]);
+                    refreshToken = refreshMatch ? decodeURIComponent(refreshMatch[1]) : null;
+                    console.log('🔍 Method 3 (regex):', { accessToken: !!accessToken, refreshToken: !!refreshToken });
+                }
+            }
+            
+            // Get custom parameters we passed (always in query string before hash)
+            const searchBeforeHash = window.location.search || '';
+            const customParams = new URLSearchParams(searchBeforeHash);
+            const appScheme = customParams.get('app_scheme') || 'tipza';
+            const customDeepLink = customParams.get('deep_link');
+            
+            console.log('📱 App scheme:', appScheme);
+            console.log('🔑 Access token:', accessToken ? `${accessToken.length} chars` : 'NONE');
+            console.log('🔑 Refresh token:', refreshToken ? `${refreshToken.length} chars` : 'NONE');
+            console.log('🎯 Custom deep link:', customDeepLink);
+            
+            // Update debug info
+            $('debug').textContent = `AT: ${accessToken ? accessToken.length : 0} | RT: ${refreshToken ? refreshToken.length : 0} | Scheme: ${appScheme}`;
+            
+            // Show error
+            function showError(msg) {
+                $('spinner').classList.add('hidden');
+                $('title').textContent = 'Authentication Failed';
+                $('message').textContent = '';
+                $('error').textContent = msg;
+                $('error').classList.remove('hidden');
+                $('debug').textContent += ' | ERROR';
+            }
+            
+            // Show success with deep link
+            function showSuccess(deepLink) {
+                $('spinner').classList.add('hidden');
+                $('checkmark').classList.remove('hidden');
+                $('title').textContent = 'Success!';
+                $('message').textContent = 'Redirecting to Tipza...';
+                
+                $('open-btn').href = deepLink;
+                $('open-btn').onclick = (e) => {
+                    e.preventDefault();
+                    window.location.href = deepLink;
+                };
+                
+                $('copy-btn').onclick = () => {
+                    navigator.clipboard.writeText(deepLink).then(() => {
+                        $('copy-btn').textContent = '✓ Copied!';
+                        $('help').classList.remove('hidden');
+                        setTimeout(() => { $('copy-btn').textContent = 'Copy Link'; }, 2000);
+                    }).catch(() => {
+                        prompt('Copy this link:', deepLink);
+                    });
+                };
+                
+                $('actions').classList.remove('hidden');
+                $('help').classList.remove('hidden');
+                
+                console.log('🚀 Redirecting to:', deepLink.substring(0, 150) + '...');
+                
+                // Auto-redirect
+                setTimeout(() => { window.location.href = deepLink; }, 300);
+            }
+            
+            // Handle errors
+            if (errorParam) {
+                console.error('❌ OAuth error:', errorParam, errorDescription);
+                showError(errorDescription || errorParam || 'Authentication failed. Please try again.');
+                return;
+            }
+            
+            // Handle access tokens
+            if (accessToken) {
+                // Build the deep link with tokens
+                let baseDeepLink;
+                
+                if (customDeepLink) {
+                    baseDeepLink = decodeURIComponent(customDeepLink).split('?')[0];
+                } else if (appScheme === 'expo') {
+                    baseDeepLink = 'exp://localhost:8081/--/auth/callback';
+                } else {
+                    baseDeepLink = 'tipza://auth/callback';
+                }
+                
+                // Build token params - ALWAYS include both tokens
+                const tokenParams = new URLSearchParams();
+                tokenParams.set('access_token', accessToken);
+                
+                // Include refresh token if available (required for Supabase setSession)
+                if (refreshToken && refreshToken.length > 10) {
+                    tokenParams.set('refresh_token', refreshToken);
+                    console.log('✅ Including refresh token');
+                } else {
+                    console.warn('⚠️ No valid refresh token to include');
+                    // Try to extract from hash manually as last resort
+                    const hashStr = window.location.hash;
+                    const rtMatch = hashStr.match(/refresh_token=([^&]+)/);
+                    if (rtMatch && rtMatch[1]) {
+                        const extractedRT = decodeURIComponent(rtMatch[1]);
+                        if (extractedRT.length > 10) {
+                            tokenParams.set('refresh_token', extractedRT);
+                            console.log('✅ Extracted refresh token manually:', extractedRT.length, 'chars');
+                        }
+                    }
+                }
+                
+                tokenParams.set('type', tokenType);
+                
+                const deepLink = baseDeepLink + '?' + tokenParams.toString();
+                
+                console.log('🔗 Final deep link length:', deepLink.length);
+                $('debug').textContent += ` | Link: ${deepLink.length}`;
+                
+                showSuccess(deepLink);
+                return;
+            }
+            
+            // No tokens - might need to verify with Supabase first
+            const verificationToken = customParams.get('token');
+            if (verificationToken) {
+                $('message').textContent = 'Verifying...';
+                const typeParam = customParams.get('type') || 'signup';
+                const currentUrl = window.location.origin + window.location.pathname;
+                const verifyUrl = `https://trxpdpedeivpynwnemtl.supabase.co/auth/v1/verify?token=${encodeURIComponent(verificationToken)}&type=${encodeURIComponent(typeParam)}&redirect_to=${encodeURIComponent(currentUrl)}`;
+                console.log('🔄 Redirecting to verify:', verifyUrl);
+                window.location.href = verifyUrl;
+                return;
+            }
+            
+            // Wait for redirect with tokens
+            $('message').textContent = 'Waiting for authentication...';
+            setTimeout(() => {
+                if (!window.location.hash.includes('access_token') && !window.location.search.includes('access_token')) {
+                    showError('No authentication data received. Please try again.');
+                }
+            }, 5000);
+        })();
+    </script>
+</body>
+</html>
