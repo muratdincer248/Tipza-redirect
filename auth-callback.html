@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tipza - Email Verified</title>
+    <title>Tipza - Authentication</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -47,6 +47,7 @@
         .error { color: #ff6b6b; margin-top: 16px; }
         .hidden { display: none; }
         .help { font-size: 12px; opacity: 0.6; margin-top: 20px; }
+        .debug { font-size: 10px; opacity: 0.4; margin-top: 24px; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -57,7 +58,7 @@
             <path d="M18 30l8 8 16-16" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         
-        <h1 id="title">Verifying...</h1>
+        <h1 id="title">Authenticating...</h1>
         <p id="message">Please wait</p>
         <p class="error hidden" id="error"></p>
         
@@ -66,67 +67,46 @@
             <button class="btn btn-secondary" id="copy-btn">Copy Link</button>
         </div>
         
-        <p class="help hidden" id="help">If the app doesn't open, paste the copied link in Expo Go</p>
+        <p class="help hidden" id="help">If the app doesn't open automatically, tap "Open Tipza" or copy the link.</p>
+        <p class="debug" id="debug"></p>
     </div>
 
     <script>
         (function() {
             const $ = id => document.getElementById(id);
             
-            // Parse URL
+            // Parse URL parameters
             const hash = window.location.hash.substring(1);
             const hashParams = new URLSearchParams(hash);
             const urlParams = new URLSearchParams(window.location.search);
             
+            // Get tokens from hash (Supabase OAuth returns tokens in hash)
             const accessToken = hashParams.get('access_token');
             const refreshToken = hashParams.get('refresh_token');
             const tokenType = hashParams.get('type') || 'signup';
-            const expiresAt = hashParams.get('expires_at') || '';
-            const expiresIn = hashParams.get('expires_in') || '';
-            const tokenTypeBearer = hashParams.get('token_type') || 'bearer';
             
-            const verificationToken = urlParams.get('token');
-            const typeParam = urlParams.get('type') || 'signup';
-            const errorParam = urlParams.get('error');
-            const errorDescription = urlParams.get('error_description');
+            // Get custom parameters we passed
+            const appScheme = urlParams.get('app_scheme') || 'tipza'; // 'expo' or 'tipza'
+            const customDeepLink = urlParams.get('deep_link'); // The full deep link URL
+            
+            // Check for errors
+            const errorParam = urlParams.get('error') || hashParams.get('error');
+            const errorDescription = urlParams.get('error_description') || hashParams.get('error_description');
             
             console.log('🔗 Auth callback loaded');
+            console.log('📱 App scheme:', appScheme);
             console.log('🔑 Has access token:', !!accessToken);
-            console.log('🔑 Has verification token:', !!verificationToken);
             console.log('🔑 Access token length:', accessToken ? accessToken.length : 0);
             console.log('🔑 Refresh token length:', refreshToken ? refreshToken.length : 0);
-            console.log('🔑 Full hash length:', window.location.hash.length);
-            console.log('🔑 Full hash (first 500 chars):', window.location.hash.substring(0, 500));
-            console.log('🔑 All hash params:', Array.from(hashParams.keys()));
+            console.log('🎯 Custom deep link:', customDeepLink);
             
-            // Debug: Check if refresh_token exists in hash string
-            const hashString = window.location.hash.substring(1);
-            const refreshTokenIndex = hashString.indexOf('refresh_token=');
-            if (refreshTokenIndex !== -1) {
-                const refreshTokenStart = refreshTokenIndex + 'refresh_token='.length;
-                const afterRefreshToken = hashString.substring(refreshTokenStart);
-                const refreshTokenEnd = afterRefreshToken.indexOf('&');
-                const rawRefreshToken = refreshTokenEnd !== -1 
-                    ? afterRefreshToken.substring(0, refreshTokenEnd)
-                    : afterRefreshToken;
-                console.log('🔑 Raw refresh token from hash (first 50 chars):', rawRefreshToken.substring(0, 50));
-                console.log('🔑 Raw refresh token length:', rawRefreshToken.length);
-                console.log('🔑 Decoded refresh token length:', decodeURIComponent(rawRefreshToken).length);
-            } else {
-                console.warn('⚠️ refresh_token= not found in hash string');
-            }
-            
-            // Check for errors in hash
-            const hashError = hashParams.get('error');
-            const hashErrorCode = hashParams.get('error_code');
-            if (hashError) {
-                console.error('❌ Error in hash:', hashErrorCode, hashParams.get('error_description'));
-            }
+            // Show debug info
+            $('debug').textContent = `Scheme: ${appScheme} | Token: ${accessToken ? 'Yes' : 'No'}`;
             
             // Show error
             function showError(msg) {
                 $('spinner').classList.add('hidden');
-                $('title').textContent = 'Verification Failed';
+                $('title').textContent = 'Authentication Failed';
                 $('message').textContent = '';
                 $('error').textContent = msg;
                 $('error').classList.remove('hidden');
@@ -136,25 +116,13 @@
             function showSuccess(deepLink) {
                 $('spinner').classList.add('hidden');
                 $('checkmark').classList.remove('hidden');
-                $('title').textContent = 'Email Verified!';
-                $('message').textContent = 'Tap below to continue';
+                $('title').textContent = 'Success!';
+                $('message').textContent = 'Redirecting to Tipza...';
                 
                 $('open-btn').href = deepLink;
                 $('open-btn').onclick = (e) => {
                     e.preventDefault();
-                    // Try multiple methods to open deep link on iOS
-                    // Method 1: Direct location change
                     window.location.href = deepLink;
-                    
-                    // Method 2: Fallback after short delay (in case first method fails)
-                    setTimeout(() => {
-                        // Try using window.open as fallback
-                        const fallbackWindow = window.open(deepLink, '_self');
-                        if (!fallbackWindow) {
-                            // If that fails, show copy button
-                            $('copy-btn').click();
-                        }
-                    }, 500);
                 };
                 
                 $('copy-btn').onclick = () => {
@@ -168,87 +136,62 @@
                 };
                 
                 $('actions').classList.remove('hidden');
+                $('help').classList.remove('hidden');
                 
-                // Try to open automatically after a moment
-                setTimeout(() => {
-                    window.location.href = deepLink;
-                }, 500);
+                // Try to open automatically
+                console.log('🚀 Attempting to open:', deepLink.substring(0, 100) + '...');
+                
+                // Multiple attempts with different methods
+                setTimeout(() => { window.location.href = deepLink; }, 100);
+                setTimeout(() => { window.location.replace(deepLink); }, 500);
             }
             
-            // Handle errors from Supabase (check both query params and hash)
-            const hashErrorDescription = hashParams.get('error_description');
-            
-            if (errorParam || hashError) {
-                const errorMsg = errorDescription || hashErrorDescription || errorParam || hashError;
-                const errorCode = hashErrorCode || '';
-                
-                console.error('❌ Supabase error:', errorCode, errorMsg);
-                
-                // Special handling for expired links
-                if (errorCode === 'otp_expired' || errorMsg?.includes('expired')) {
-                    showError('This link has expired. Please request a new magic link.');
-                } else {
-                    showError(errorMsg || 'Authentication failed. Please try again.');
-                }
+            // Handle errors
+            if (errorParam) {
+                console.error('❌ OAuth error:', errorParam, errorDescription);
+                showError(errorDescription || errorParam || 'Authentication failed. Please try again.');
                 return;
             }
             
-            // Handle verification token (first step - need to verify with Supabase)
-            if (verificationToken && !accessToken) {
-                $('message').textContent = 'Verifying with server...';
-                const currentUrl = window.location.origin + window.location.pathname;
-                const verifyUrl = `https://trxpdpedeivpynwnemtl.supabase.co/auth/v1/verify?token=${encodeURIComponent(verificationToken)}&type=${encodeURIComponent(typeParam)}&redirect_to=${encodeURIComponent(currentUrl)}`;
-                window.location.href = verifyUrl;
-                return;
-            }
-            
-            // Handle access tokens (second step - redirect to app)
+            // Handle access tokens
             if (accessToken) {
-                // Check if refresh token is valid (should be 200+ chars)
-                let validRefreshToken = refreshToken;
+                // Build the deep link with tokens
+                let baseDeepLink;
                 
-                if (!refreshToken || refreshToken.length < 30) {
-                    console.warn('⚠️ Refresh token is too short or missing:', refreshToken?.length || 0);
-                    console.warn('⚠️ Attempting to extract refresh token manually from hash...');
-                    
-                    // Try to extract refresh token manually from hash string
-                    const hashString = window.location.hash.substring(1);
-                    const refreshTokenMatch = hashString.match(/refresh_token=([^&]*)/);
-                    if (refreshTokenMatch && refreshTokenMatch[1]) {
-                        const extractedRefreshToken = decodeURIComponent(refreshTokenMatch[1]);
-                        console.log('🔑 Extracted refresh token length:', extractedRefreshToken.length);
-                        if (extractedRefreshToken.length >= 30) {
-                            validRefreshToken = extractedRefreshToken;
-                            console.log('✅ Using manually extracted refresh token');
-                        } else {
-                            console.warn('⚠️ Manually extracted refresh token is also too short');
-                        }
-                    }
+                if (customDeepLink) {
+                    // Use the custom deep link passed from the app
+                    // Remove any existing query params and add our tokens
+                    baseDeepLink = customDeepLink.split('?')[0];
+                } else if (appScheme === 'expo') {
+                    // Expo Go - this shouldn't happen anymore but keep as fallback
+                    // We need the full exp:// URL which should be in customDeepLink
+                    console.warn('⚠️ Expo scheme without custom deep link - this may not work');
+                    baseDeepLink = 'exp://localhost:8081/--/auth/callback';
+                } else {
+                    // Production app
+                    baseDeepLink = 'tipza://auth/callback';
                 }
                 
-                // Build tokens string - use empty string if refresh token is invalid
-                const refreshTokenParam = validRefreshToken && validRefreshToken.length >= 30
-                    ? `&refresh_token=${encodeURIComponent(validRefreshToken)}`
-                    : '';
+                // Build token params
+                const tokenParams = new URLSearchParams();
+                tokenParams.set('access_token', accessToken);
+                if (refreshToken && refreshToken.length >= 30) {
+                    tokenParams.set('refresh_token', refreshToken);
+                }
+                tokenParams.set('type', tokenType);
                 
-                // Build tokens string - prioritize access_token (required)
-                // Note: Deep links have length limits, so we include essential params only
-                const essentialParams = `?access_token=${encodeURIComponent(accessToken)}${refreshTokenParam}&type=${encodeURIComponent(tokenType)}`;
+                const deepLink = baseDeepLink + '?' + tokenParams.toString();
                 
-                // Use production app deep link scheme (tipza://)
-                // This works for TestFlight and App Store builds
-                const deepLink = 'tipza://auth/callback' + essentialParams;
-                
-                console.log('✅ Redirecting to Tipza app');
+                console.log('✅ Built deep link:', deepLink.substring(0, 150) + '...');
                 console.log('🔑 Deep link length:', deepLink.length);
-                console.log('🔑 Deep link preview:', deepLink.substring(0, 100) + '...');
                 
-                // Check if deep link is too long (iOS has ~2000 char limit, but be safe with 1500)
-                if (deepLink.length > 1500) {
-                    console.warn('⚠️ Deep link is very long (', deepLink.length, 'chars) - might be truncated');
-                    console.warn('⚠️ Using minimal params (access_token only)');
-                    // Use only access_token if link is too long
-                    const minimalLink = `tipza://auth/callback?access_token=${encodeURIComponent(accessToken)}&type=${encodeURIComponent(tokenType)}`;
+                // Check if deep link is too long
+                if (deepLink.length > 2000) {
+                    console.warn('⚠️ Deep link is very long, using minimal params');
+                    const minimalParams = new URLSearchParams();
+                    minimalParams.set('access_token', accessToken);
+                    minimalParams.set('type', tokenType);
+                    const minimalLink = baseDeepLink + '?' + minimalParams.toString();
                     showSuccess(minimalLink);
                 } else {
                     showSuccess(deepLink);
@@ -256,8 +199,27 @@
                 return;
             }
             
-            // No tokens found
-            showError('Invalid or expired verification link. Please request a new one.');
+            // No tokens found - might be initial redirect, wait for Supabase
+            if (!accessToken && !errorParam) {
+                $('message').textContent = 'Waiting for authentication...';
+                
+                // If we have a verification token, redirect to Supabase
+                const verificationToken = urlParams.get('token');
+                if (verificationToken) {
+                    const typeParam = urlParams.get('type') || 'signup';
+                    const currentUrl = window.location.origin + window.location.pathname;
+                    const verifyUrl = `https://trxpdpedeivpynwnemtl.supabase.co/auth/v1/verify?token=${encodeURIComponent(verificationToken)}&type=${encodeURIComponent(typeParam)}&redirect_to=${encodeURIComponent(currentUrl)}`;
+                    window.location.href = verifyUrl;
+                    return;
+                }
+                
+                // Wait a bit and show error if no tokens arrive
+                setTimeout(() => {
+                    if (!window.location.hash.includes('access_token')) {
+                        showError('No authentication data received. Please try again.');
+                    }
+                }, 5000);
+            }
         })();
     </script>
 </body>
